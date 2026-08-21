@@ -78,7 +78,7 @@ def plot_results(
     """Generate the eight benchmark figures described by the benchmark plan."""
     if flops_per_pe <= 0.0:
         raise ValueError("flops_per_pe must be positive")
-    rows = [row for row in records if row.get("status", "ok") in {"ok", "external"}]
+    rows = [row for row in records if row.get("status") in {"ok", "external"}]
     if not rows:
         raise ValueError("no successful benchmark records to plot")
     plt = _pyplot()

@@ -388,7 +388,7 @@ def run_synthetic_case(
         "launches": timing.launches,
         "edges_per_second": case.edges / (timing.time_ms * 1.0e-3),
         "atoms_per_second": case.atoms / (timing.time_ms * 1.0e-3),
-        "gedge_per_second": case.edges / (timing.time_ms * 1.0e6),
+        "gedge_per_second": (case.edges / (timing.time_ms * 1.0e-3) / 1.0e9),
         "logical_phases": "graph,model_fused,backward"
         if case.mode != "energy"
         else "graph,model_fused",

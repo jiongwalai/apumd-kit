@@ -14,6 +14,8 @@ from typing import (
     Any,
 )
 
+MODEL_TYPE_CAPACITY = 118
+
 if TYPE_CHECKING:
     from .contract import (
         BenchmarkCase,
@@ -229,10 +231,15 @@ def estimate_workload(
         table_rows * 6 * (case.model.channels + case.model.radial_modes) * dtype_bytes
     )
     pair_bytes = case.model.channels * (2 + case.model.radial_modes) * dtype_bytes
-    model_bytes = (
+    active_model_bytes = (
         table_bytes
         + case.model_types * case.model.channels * dtype_bytes
         + case.model_types**2 * pair_bytes
+    )
+    model_bytes = (
+        table_bytes
+        + MODEL_TYPE_CAPACITY * case.model.channels * dtype_bytes
+        + MODEL_TYPE_CAPACITY**2 * pair_bytes
     )
     edge_feature_width = (
         case.model.channels + case.model.radial_modes + (case.model.lmax + 1) ** 2 + 2
@@ -262,7 +269,7 @@ def estimate_workload(
         node_bytes=node_bytes,
         csr_bytes=csr_bytes,
         model_bytes=model_bytes,
-        model_cache_bytes=model_bytes,
+        model_cache_bytes=active_model_bytes,
         edge_intermediate_bytes=edge_intermediate_bytes,
         saved_edge_bytes=saved_edge_bytes,
         workspace_bytes=workspace_bytes,

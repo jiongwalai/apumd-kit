@@ -91,6 +91,7 @@ def test_workload_scales_edges_and_exposes_recompute_tradeoff() -> None:
     assert large_estimate.edges == 2 * small_estimate.edges
     assert large_estimate.flops_total > small_estimate.flops_total
     assert small_estimate.save_step_bytes > small_estimate.recompute_step_bytes
+    assert small_estimate.model_cache_bytes < small_estimate.model_bytes
     canonical = estimate_workload(
         BenchmarkCase(model, "compressed_canonical", 100, 32, 1, "energy", 1024)
     )
