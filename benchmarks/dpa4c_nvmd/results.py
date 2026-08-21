@@ -239,7 +239,11 @@ def read_results(path: str | Path) -> list[dict[str, Any]]:
         with result_path.open(encoding="utf-8") as handle:
             payload = json.load(handle)
         if payload.get("schema_version") != RESULT_SCHEMA_VERSION:
-            raise ValueError("unsupported benchmark result schema")
+            raise ValueError(
+                "unsupported benchmark result schema: "
+                f"expected {RESULT_SCHEMA_VERSION}, "
+                f"got {payload.get('schema_version')}"
+            )
         return [dict(row) for row in payload.get("records", [])]
     with result_path.open(newline="", encoding="utf-8") as handle:
         return [dict(row) for row in csv.DictReader(handle)]

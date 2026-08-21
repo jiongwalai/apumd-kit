@@ -43,17 +43,16 @@ def quantize(
     array = np.asarray(values)
     if spec.bits <= 0:
         raise ValueError("quantization bits must be positive")
-    if spec.kind in {"float32", "float16", "bfloat16"}:
+    if spec.kind == "bfloat16":
+        # bfloat16 has seven explicit mantissa bits. Operate on the
+        # significand so the emulator remains available without torch.
+        return _quantize_mantissa(array, 7), 1.0
+    if spec.kind in {"float32", "float16"}:
         dtype = {
             "float32": np.float32,
             "float16": np.float16,
-            "bfloat16": np.float32,
         }[spec.kind]
         result = array.astype(dtype).astype(np.float64)
-        if spec.kind == "bfloat16":
-            # bfloat16 has seven explicit mantissa bits. Operate on the
-            # significand so the emulator remains available without torch.
-            result = _quantize_mantissa(array, 7)
         return result, 1.0
     if spec.kind in {"float24", "fixed", "symmetric"}:
         if spec.kind == "float24":

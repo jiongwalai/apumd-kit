@@ -69,6 +69,10 @@ def build_synthetic_graph(
     """Build a regular graph with the requested atoms, degree, and type count."""
     case.validate()
     torch = _require_torch()
+    from deepmd.dpmodel.utils.neighbor_graph import (
+        NeighborGraph,
+    )
+
     generator = torch.Generator(device=device).manual_seed(seed)
     atoms = case.atoms
     edges = case.edges
@@ -120,10 +124,6 @@ def build_synthetic_graph(
         device=device,
         dtype=torch.int64,
     ).remainder(case.active_types)
-    from deepmd.dpmodel.utils.neighbor_graph import (
-        NeighborGraph,
-    )
-
     graph = NeighborGraph(
         n_node=torch.tensor([atoms], device=device, dtype=torch.int64),
         edge_index=edge_index,
