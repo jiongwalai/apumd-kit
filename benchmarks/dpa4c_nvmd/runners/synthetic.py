@@ -361,7 +361,6 @@ def run_synthetic_case(
             status="not_run",
             error="compressed CUDA benchmark currently requires float32",
         )
-    torch = _require_torch()
     graph_timing, workload = measure(
         "graph",
         lambda: build_synthetic_graph(case, device=device, seed=seed),

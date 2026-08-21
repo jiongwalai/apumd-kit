@@ -245,6 +245,8 @@ def estimate_workload(
     total_step_bytes = (
         save_step_bytes if save_edge_intermediates else recompute_step_bytes
     )
+    if total_step_bytes <= 0:
+        raise ValueError("estimated step traffic must be positive")
     bytes_per_edge = total_step_bytes / edges
     bytes_per_atom_step = total_step_bytes / case.atoms
     arithmetic_intensity = total_flops / total_step_bytes

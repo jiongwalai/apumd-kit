@@ -9,7 +9,8 @@ utilities together while leaving the existing DPA4C kernels unchanged.
 
 `configs/matrix.json` is the source of the first benchmark matrix. The
 default command targets **DPA4C-Air** and uses the exact descriptor profile
-derived by `descriptor_profile()`:
+derived by the benchmark's `profile_dimensions()` mirror of the backend
+`descriptor_profile()`:
 
 | model | `(C0, L, R)`  | moment width | output width |
 | ----- | ------------- | -----------: | -----------: |

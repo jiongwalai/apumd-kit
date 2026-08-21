@@ -53,6 +53,20 @@ def _save(figure: Any, output_dir: Path, name: str) -> Path:
     return path
 
 
+def _projection_reference(rows: list[Mapping[str, Any]]) -> Mapping[str, Any]:
+    """Select the documented Air compressed baseline for the FPGA projection."""
+    for row in rows:
+        if row.get("model") == "Air" and row.get("path") == "compressed_generic":
+            return row
+    return max(
+        rows,
+        key=lambda row: (
+            _number(row, "estimate_flops_total"),
+            _number(row, "estimate_edges"),
+        ),
+    )
+
+
 def plot_results(
     records: Iterable[Mapping[str, Any]],
     output_dir: str | Path,
@@ -155,7 +169,7 @@ def plot_results(
     paths.append(_save(figure, output, "07_quantization_error"))
 
     figure, axis = plt.subplots()
-    reference = rows[0]
+    reference = _projection_reference(rows)
     flops = _number(reference, "estimate_flops_total")
     traffic = _number(reference, "estimate_total_step_bytes")
     for bandwidth in bandwidths_gbps:
