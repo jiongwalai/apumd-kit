@@ -119,6 +119,9 @@ This creates:
 1. quantization error vs bit width;
 1. projected FPGA throughput vs bandwidth and PE count.
 
+The FPGA projection assumes `2.0e9` FLOP/s per PE by default; callers can
+override this assumption through the `plot_results()` API.
+
 Plotting imports `matplotlib` lazily because it is not a core project
 dependency. Normalized CSV/JSON summaries may be archived; raw Nsight output
 and large trajectories should remain external.

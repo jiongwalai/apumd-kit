@@ -36,6 +36,7 @@ SUPPORTED_PRECISIONS = (
     "int8",
     "mixed",
 )
+MATRIX_SCHEMA_VERSION = 1
 
 
 @dataclass(frozen=True)
@@ -156,8 +157,10 @@ def load_matrix(path: str | Path) -> dict[str, Any]:
     matrix_path = Path(path)
     with matrix_path.open(encoding="utf-8") as handle:
         matrix = json.load(handle)
-    if matrix.get("schema_version") != 1:
-        raise ValueError("benchmark matrix schema_version must be 1")
+    if matrix.get("schema_version") != MATRIX_SCHEMA_VERSION:
+        raise ValueError(
+            f"benchmark matrix schema_version must be {MATRIX_SCHEMA_VERSION}"
+        )
 
     models = {
         name: _parse_model(name, value)
@@ -197,7 +200,7 @@ def load_matrix(path: str | Path) -> dict[str, Any]:
     if invalid_paths:
         raise ValueError(f"matrix contains unsupported paths: {invalid_paths}")
     return {
-        "schema_version": 1,
+        "schema_version": MATRIX_SCHEMA_VERSION,
         "models": models,
         "sweeps": sweeps,
         "baseline": matrix.get("baseline", {}),

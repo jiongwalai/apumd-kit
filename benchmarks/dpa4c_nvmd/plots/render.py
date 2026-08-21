@@ -73,8 +73,11 @@ def plot_results(
     *,
     bandwidths_gbps: tuple[float, ...] = (25.0, 50.0, 100.0, 200.0),
     pe_counts: tuple[int, ...] = (16, 32, 64, 128),
+    flops_per_pe: float = 2.0e9,
 ) -> list[Path]:
     """Generate the eight benchmark figures described by the benchmark plan."""
+    if flops_per_pe <= 0.0:
+        raise ValueError("flops_per_pe must be positive")
     rows = [row for row in records if row.get("status", "ok") in {"ok", "external"}]
     if not rows:
         raise ValueError("no successful benchmark records to plot")
@@ -175,7 +178,7 @@ def plot_results(
     for bandwidth in bandwidths_gbps:
         throughput = []
         for pe_count in pe_counts:
-            compute = pe_count * 2.0e9
+            compute = pe_count * flops_per_pe
             memory = bandwidth * 1.0e9 / max(traffic, 1.0)
             throughput.append(min(compute / max(flops, 1.0), memory))
         axis.plot(pe_counts, throughput, label=f"{bandwidth:g} GB/s")
