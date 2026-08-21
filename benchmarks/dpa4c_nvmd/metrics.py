@@ -28,7 +28,14 @@ class ProfileDimensions:
     degree_channels: tuple[int, ...]
     ranks: tuple[int, ...]
     moment_width: int
+    gram_width: int
+    bispectrum_width: int
+    quartic_width: int
     output_width: int
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return the profile widths as a JSON-compatible mapping."""
+        return asdict(self)
 
     @property
     def state_width(self) -> int:
@@ -51,9 +58,14 @@ class WorkloadEstimate:
     node_bytes: int
     csr_bytes: int
     model_bytes: int
+    model_cache_bytes: int
+    edge_intermediate_bytes: int
     saved_edge_bytes: int
     workspace_bytes: int
+    ghost_bytes: int
     total_step_bytes: int
+    recompute_step_bytes: int
+    save_step_bytes: int
     bytes_per_edge: float
     bytes_per_atom_step: float
     arithmetic_intensity: float
@@ -74,6 +86,37 @@ def _degree_channels(channels: int, lmax: int) -> tuple[int, ...]:
     return (channels, degree_one, degree_two, *([1] * (lmax - 2)))
 
 
+def _allowed_triples(lmax: int) -> tuple[tuple[int, int, int], ...]:
+    """Mirror the sorted O(3)-even degree triples in the backend layout."""
+    return tuple(
+        (first, second, third)
+        for first in range(1, lmax + 1)
+        for second in range(first, lmax + 1)
+        for third in range(second, lmax + 1)
+        if third <= first + second and (first + second + third) % 2 == 0
+    )
+
+
+def _triple_outputs(
+    triple: tuple[int, int, int],
+    ranks: tuple[int, ...],
+) -> int:
+    """Return independent probe contractions for one degree triple."""
+    first, second, third = triple
+    first_rank, second_rank, third_rank = (
+        ranks[first - 1],
+        ranks[second - 1],
+        ranks[third - 1],
+    )
+    if first == third:
+        return first_rank * (first_rank + 1) * (first_rank + 2) // 6
+    if first == second:
+        return first_rank * (first_rank + 1) // 2 * third_rank
+    if second == third:
+        return first_rank * second_rank * (second_rank + 1) // 2
+    return first_rank * second_rank * third_rank
+
+
 def profile_dimensions(model: ModelSpec) -> ProfileDimensions:
     """Return the exact profile widths used by the DPA4C implementation.
 
@@ -87,24 +130,22 @@ def profile_dimensions(model: ModelSpec) -> ProfileDimensions:
     moment_width = sum(
         (2 * degree + 1) * width for degree, width in enumerate(degree_channels)
     )
-    gram_total = sum(width * (width + 1) // 2 for width in degree_channels[1:])
-    bispectrum_base = degree_channels[0] + gram_total
-    bispectrum_dim = 0
-    for degree in range(1, model.lmax + 1):
-        for other in range(degree, model.lmax + 1):
-            third = degree + other
-            if third > model.lmax:
-                continue
-            rank_product = ranks[degree - 1] * ranks[other - 1] * ranks[third - 1]
-            bispectrum_dim += rank_product
-    # The CUDA profile has a fixed 222 block (four entries), a quartic block,
-    # and the two moment divisors plus the center-type embedding.
-    bispectrum_dim += 4 + ranks[0] * ranks[1]
-    output_width = bispectrum_base + bispectrum_dim + model.channels + 2
+    gram_width = sum(width * (width + 1) // 2 for width in degree_channels[1:])
+    bispectrum_width = sum(
+        _triple_outputs(triple, ranks) for triple in _allowed_triples(model.lmax)
+    )
+    quartic_width = ranks[0] * ranks[1]
+    bispectrum_base = degree_channels[0] + gram_width
+    output_width = (
+        bispectrum_base + bispectrum_width + quartic_width + model.channels + 2
+    )
     return ProfileDimensions(
         degree_channels=degree_channels,
         ranks=ranks,
         moment_width=moment_width,
+        gram_width=gram_width,
+        bispectrum_width=bispectrum_width,
+        quartic_width=quartic_width,
         output_width=output_width,
     )
 
@@ -172,10 +213,17 @@ def estimate_workload(
     total_flops = forward + backward
 
     # Generic graph ABI: edge vectors, two endpoints, mask, destination order.
-    edge_bytes = edges * (3 * dtype_bytes + 2 * index_bytes + 1 + index_bytes)
+    if case.path == "compressed_canonical":
+        # Canonical storage derives destinations and their order from CSR.
+        edge_bytes = edges * (3 * dtype_bytes + index_bytes)
+    else:
+        edge_bytes = edges * (3 * dtype_bytes + 2 * index_bytes + 1 + index_bytes)
     # Node state and descriptor output are written once per model invocation.
-    node_bytes = case.atoms * (profile.state_width + profile.output_width) * dtype_bytes
-    csr_bytes = (case.atoms + 1) * 8
+    node_bytes = (
+        case.atoms * (profile.state_width + profile.output_width) * dtype_bytes
+        + case.atoms * index_bytes
+    )
+    csr_bytes = (case.atoms + 1) * index_bytes
     table_rows = int(6.0 / case.table_spacing) + 1
     table_bytes = (
         table_rows * 6 * (case.model.channels + case.model.radial_modes) * dtype_bytes
@@ -189,11 +237,14 @@ def estimate_workload(
     edge_feature_width = (
         case.model.channels + case.model.radial_modes + (case.model.lmax + 1) ** 2 + 2
     )
-    saved_edge_bytes = (
-        edges * edge_feature_width * dtype_bytes if save_edge_intermediates else 0
-    )
+    edge_intermediate_bytes = edges * edge_feature_width * dtype_bytes
+    saved_edge_bytes = edge_intermediate_bytes if save_edge_intermediates else 0
     workspace_bytes = profile.state_width * case.atoms * dtype_bytes
-    total_step_bytes = edge_bytes + node_bytes + csr_bytes + saved_edge_bytes
+    recompute_step_bytes = edge_bytes + node_bytes + csr_bytes
+    save_step_bytes = recompute_step_bytes + edge_intermediate_bytes
+    total_step_bytes = (
+        save_step_bytes if save_edge_intermediates else recompute_step_bytes
+    )
     bytes_per_edge = total_step_bytes / edges
     bytes_per_atom_step = total_step_bytes / case.atoms
     arithmetic_intensity = total_flops / total_step_bytes
@@ -209,9 +260,14 @@ def estimate_workload(
         node_bytes=node_bytes,
         csr_bytes=csr_bytes,
         model_bytes=model_bytes,
+        model_cache_bytes=model_bytes,
+        edge_intermediate_bytes=edge_intermediate_bytes,
         saved_edge_bytes=saved_edge_bytes,
         workspace_bytes=workspace_bytes,
+        ghost_bytes=0,
         total_step_bytes=total_step_bytes,
+        recompute_step_bytes=recompute_step_bytes,
+        save_step_bytes=save_step_bytes,
         bytes_per_edge=bytes_per_edge,
         bytes_per_atom_step=bytes_per_atom_step,
         arithmetic_intensity=arithmetic_intensity,

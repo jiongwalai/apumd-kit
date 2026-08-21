@@ -27,6 +27,15 @@ SUPPORTED_PATHS = (
     "lammps",
 )
 SUPPORTED_MODES = ("energy", "energy_force", "energy_force_virial")
+SUPPORTED_PRECISIONS = (
+    "float32",
+    "float24",
+    "float16",
+    "bfloat16",
+    "int16",
+    "int8",
+    "mixed",
+)
 
 
 @dataclass(frozen=True)
@@ -105,7 +114,7 @@ class BenchmarkCase:
             raise ValueError("active_types must be positive")
         if self.tile <= 0:
             raise ValueError("tile must be positive")
-        if self.precision not in {"float32", "float16", "bfloat16"}:
+        if self.precision not in SUPPORTED_PRECISIONS:
             raise ValueError(f"unsupported precision {self.precision}")
         if self.table_spacing <= 0.0:
             raise ValueError("table_spacing must be positive")
@@ -191,7 +200,114 @@ def load_matrix(path: str | Path) -> dict[str, Any]:
         "schema_version": 1,
         "models": models,
         "sweeps": sweeps,
+        "baseline": matrix.get("baseline", {}),
         "paths": paths,
         "notes": matrix.get("notes", []),
         "source": str(matrix_path),
     }
+
+
+def iter_cases(
+    matrix: dict[str, Any],
+    *,
+    models: tuple[str, ...] | None = None,
+    paths: tuple[str, ...] | None = None,
+    sweep: str = "point",
+    precision: str = "float32",
+) -> list[BenchmarkCase]:
+    """Build a non-Cartesian case list from a validated matrix.
+
+    ``point`` emits one baseline case per model and path. ``all`` emits one
+    one-dimensional sweep at a time, holding all other dimensions at their
+    first configured value. A named dimension (for example ``neighbors``)
+    emits only that sweep. This keeps the Air campaign broad without creating
+    an unmanageable Cartesian product.
+    """
+    if sweep not in {
+        "point",
+        "all",
+        "atoms",
+        "neighbors",
+        "active_types",
+        "modes",
+        "tiles",
+        "table_spacings",
+    }:
+        raise ValueError(f"unsupported sweep {sweep}")
+    selected_models = tuple(models or matrix["models"])
+    selected_paths = tuple(paths or matrix["paths"])
+    unknown_models = [name for name in selected_models if name not in matrix["models"]]
+    if unknown_models:
+        raise ValueError(f"unknown benchmark models: {unknown_models}")
+    unknown_paths = [name for name in selected_paths if name not in matrix["paths"]]
+    if unknown_paths:
+        raise ValueError(f"unknown benchmark paths: {unknown_paths}")
+    if precision not in SUPPORTED_PRECISIONS:
+        raise ValueError(f"unsupported precision {precision}")
+
+    sweeps = matrix["sweeps"]
+    baseline = {
+        dimension: matrix.get("baseline", {}).get(dimension, sweeps[dimension][0])
+        for dimension in (
+            "atoms",
+            "neighbors",
+            "active_types",
+            "modes",
+            "tiles",
+            "table_spacings",
+        )
+    }
+    dimensions = (
+        "atoms",
+        "neighbors",
+        "active_types",
+        "modes",
+        "tiles",
+        "table_spacings",
+    )
+    selected_dimensions = (
+        dimensions if sweep == "all" else ((None,) if sweep == "point" else (sweep,))
+    )
+    cases: list[BenchmarkCase] = []
+    for model_name in selected_models:
+        model = matrix["models"][model_name]
+        for path in selected_paths:
+            for dimension in selected_dimensions:
+                values = (None,) if dimension is None else sweeps[dimension]
+                for value in values:
+                    case = BenchmarkCase(
+                        model=model,
+                        path=path,
+                        atoms=int(value)
+                        if dimension == "atoms"
+                        else int(baseline["atoms"]),
+                        neighbors=(
+                            int(value)
+                            if dimension == "neighbors"
+                            else int(baseline["neighbors"])
+                        ),
+                        active_types=(
+                            int(value)
+                            if dimension == "active_types"
+                            else int(baseline["active_types"])
+                        ),
+                        mode=(
+                            str(value)
+                            if dimension == "modes"
+                            else str(baseline["modes"])
+                        ),
+                        tile=(
+                            int(value)
+                            if dimension == "tiles"
+                            else int(baseline["tiles"])
+                        ),
+                        precision=precision,
+                        table_spacing=(
+                            float(value)
+                            if dimension == "table_spacings"
+                            else float(baseline["table_spacings"])
+                        ),
+                    )
+                    case.validate()
+                    cases.append(case)
+    return cases

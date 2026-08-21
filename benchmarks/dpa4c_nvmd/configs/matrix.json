@@ -75,6 +75,14 @@
       0.01
     ]
   },
+  "baseline": {
+    "atoms": 2000,
+    "neighbors": 64,
+    "active_types": 1,
+    "modes": "energy",
+    "tiles": 131072,
+    "table_spacings": 0.002
+  },
   "paths": [
     "uncompressed",
     "compressed_generic",
