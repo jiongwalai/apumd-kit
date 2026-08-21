@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "models": {
+    "Nano": {
+      "channels": 8,
+      "lmax": 2,
+      "radial_modes": 0,
+      "fitting_width": 96
+    },
+    "Mini": {
+      "channels": 32,
+      "lmax": 2,
+      "radial_modes": 0,
+      "fitting_width": 192
+    },
+    "Neo": {
+      "channels": 32,
+      "lmax": 2,
+      "radial_modes": 4,
+      "fitting_width": 192
+    },
+    "Air": {
+      "channels": 64,
+      "lmax": 3,
+      "radial_modes": 4,
+      "fitting_width": 256
+    },
+    "Plus": {
+      "channels": 128,
+      "lmax": 3,
+      "radial_modes": 4,
+      "fitting_width": 384
+    }
+  },
+  "sweeps": {
+    "atoms": [
+      2000,
+      32000,
+      128000,
+      1000000
+    ],
+    "neighbors": [
+      32,
+      64,
+      96,
+      128,
+      160,
+      192,
+      256
+    ],
+    "active_types": [
+      1,
+      4,
+      16,
+      32,
+      118
+    ],
+    "modes": [
+      "energy",
+      "energy_force",
+      "energy_force_virial"
+    ],
+    "tiles": [
+      1024,
+      4096,
+      16384,
+      65536,
+      131072,
+      262144
+    ],
+    "table_spacings": [
+      0.001,
+      0.002,
+      0.005,
+      0.01
+    ]
+  },
+  "paths": [
+    "uncompressed",
+    "compressed_generic",
+    "compressed_canonical",
+    "lammps"
+  ],
+  "notes": [
+    "Air is the first architecture target.",
+    "The N_type=1 point uses active_types=1 and model_types=2 because the compressed operator requires type_count > 1.",
+    "Do not take the Cartesian product of every sweep dimension.",
+    "Nsight reports belong outside the repository; commit only normalized CSV/JSON summaries."
+  ]
+}
